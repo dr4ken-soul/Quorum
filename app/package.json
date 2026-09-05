@@ -10,9 +10,9 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "node --test \"test/*.test.ts\"",
-    "demo": "node src/dev/demo.ts",
-    "scenario": "node src/dev/demo.ts --scenario",
-    "server": "node src/server.ts"
+    "demo": "node --env-file-if-exists=.env src/dev/demo.ts",
+    "scenario": "node --env-file-if-exists=.env src/dev/demo.ts --scenario",
+    "server": "node --env-file-if-exists=.env src/server.ts"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
