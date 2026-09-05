@@ -1,14 +1,17 @@
 /**
  * Transport boundary.
  *
- * Photon is the intended host platform for Quorum, but its public HTTP API
- * could not be verified at build time. Rather than inventing endpoints —
- * which the build guide explicitly forbids — this module defines the single
- * boundary every inbound and outbound message must pass through.
+ * Photon is the intended host platform for Quorum. Its integration surface is
+ * Spectrum (docs: https://photon.codes/docs):
  *
- * When Photon's real transport is confirmed, implement PhotonTransport against
- * their documented API and register it here. Nothing else in the agent needs
- * to change.
+ * - Inbound: signed webhook deliveries, implemented by WebhookTransport.
+ * - Outbound: the spectrum-ts SDK loop — Spectrum exposes no HTTP send
+ *   endpoint, so production replies require a long-lived process running
+ *   Spectrum({ projectId, projectSecret, providers: [imessage.config()] }).
+ *
+ * This module defines the single boundary every inbound and outbound message
+ * passes through. The real PhotonTransport wraps that SDK loop and maps it
+ * onto these types without touching the court, evidence, or verdict logic.
  */
 
 export interface InboundMessage {
@@ -56,20 +59,20 @@ export class LocalConsoleTransport implements Transport {
 }
 
 /**
- * Placeholder for the real Photon transport. Registered only when
- * PHOTON_* environment variables are present; the webhook server module
- * uses this as its integration point.
+ * Spectrum Cloud credentials, created at https://app.photon.codes.
+ * PROJECT_ID / PROJECT_SECRET are the documented names; PHOTON_-prefixed
+ * aliases are honoured first to keep the .env self-describing.
  */
 export interface PhotonTransportConfig {
-  readonly agentId: string;
+  readonly projectId: string;
+  readonly projectSecret: string;
   readonly apiBaseUrl: string;
-  readonly apiKey: string;
 }
 
 export function photonTransportConfigured(env: NodeJS.ProcessEnv): PhotonTransportConfig | null {
-  const agentId = env.PHOTON_AGENT_ID?.trim();
-  const apiBaseUrl = env.PHOTON_API_BASE_URL?.trim();
-  const apiKey = env.PHOTON_API_KEY?.trim();
-  if (!agentId || !apiBaseUrl || !apiKey) return null;
-  return { agentId, apiBaseUrl, apiKey };
+  const projectId = env.PHOTON_PROJECT_ID?.trim() || env.PROJECT_ID?.trim();
+  const projectSecret = env.PHOTON_PROJECT_SECRET?.trim() || env.PROJECT_SECRET?.trim();
+  if (!projectId || !projectSecret) return null;
+  const apiBaseUrl = env.PHOTON_API_BASE_URL?.trim() || 'https://spectrum.photon.codes';
+  return { projectId, projectSecret, apiBaseUrl };
 }

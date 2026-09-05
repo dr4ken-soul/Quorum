@@ -34,7 +34,14 @@ const SCENARIOS: Record<string, Line[]> = {
 };
 
 async function main(): Promise<void> {
-  const scenarioKey = process.argv[2] ?? 'clear';
+  // Accept both `--scenario suspicious` (npm run scenario -- suspicious) and a
+  // positional form (node src/dev/demo.ts suspicious); default to "clear".
+  const flagIndex = process.argv.indexOf('--scenario');
+  const positional =
+    flagIndex !== -1
+      ? process.argv[flagIndex + 1]
+      : process.argv.slice(2).find((arg) => !arg.startsWith('--'));
+  const scenarioKey = positional ?? 'clear';
   const lines = SCENARIOS[scenarioKey];
   if (!lines) {
     console.error(`Unknown scenario "${scenarioKey}". Available: ${Object.keys(SCENARIOS).join(', ')}`);

@@ -38,14 +38,15 @@ Key design points:
 - Retention: message bodies expire after 30 days; any participant can request deletion, which removes content first and leaves a ledger proof that deletion ran
 - Logging redacts message bodies, attachments, and secret-like fields before anything is written
 
-### Photon integration status
+### Photon integration
 
-The Photon platform documentation remained unreachable during this build, so no Photon endpoints were invented. The agent talks to a small transport interface (`app/src/transport/types.ts`) with two reference implementations:
+Photon (Spectrum) is the intended host platform: <https://photon.codes>. The integration surface is now documented and implemented:
 
-- `LocalConsoleTransport` — the development console used by the demos
-- `WebhookTransport` — an HMAC-sha256-signed webhook boundary (`x-quorum-signature`), tested end-to-end
+- **Inbound** — `WebhookTransport` (`app/src/transport/webhook.ts`) implements Spectrum's signed webhook format end-to-end: `POST /spectrum-webhook` with `X-Spectrum-Signature: v0=<hmac-sha256 of "v0:{timestamp}:{rawBody}">`, `{event, space, message}` payloads, a 5-minute replay window, at-least-once dedupe on `(webhookId, message.id)`, and forward-compatible handling of unknown events (docs: <https://photon.codes/docs/spectrum-ts/webhooks>).
+- **Outbound** — Spectrum webhooks are inbound-only (no HTTP send endpoint). Production replies run through the `spectrum-ts` SDK loop — `Spectrum({ projectId, projectSecret, providers: [imessage.config()] })` — which is the remaining `PhotonTransport` work in `app/src/transport/types.ts`. It slots in without touching the court, evidence, or verdict logic.
+- **Credentials** — create a project at <https://app.photon.codes> and copy `PROJECT_ID` / `PROJECT_SECRET` into `app/.env`. When you register a webhook URL (dashboard or Spectrum API), a 64-character `SPECTRUM_SIGNING_SECRET` is returned exactly once; set it in `app/.env` to run the webhook server with `npm run server`.
 
-These form the integration seam. A real `PhotonTransport` can be added against the official platform documentation without touching the court, evidence, or verdict logic.
+Until those credentials exist, the agent runs in local console mode (`LocalConsoleTransport`), and the demos replay the full court arc offline.
 
 ## The site (`web/`)
 

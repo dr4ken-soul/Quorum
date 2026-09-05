@@ -5,9 +5,9 @@
  * a NEXT_PUBLIC_ variable or through a log line.
  */
 export interface Config {
-  readonly photonAgentId: string | null;
-  readonly photonApiKey: string | null;
-  readonly photonApiBaseUrl: string | null;
+  readonly photonProjectId: string | null;
+  readonly photonProjectSecret: string | null;
+  readonly photonApiBaseUrl: string;
   readonly photonWebhookSecret: string | null;
   readonly photonEnvironment: string;
   readonly evidenceRequestTimeoutMs: number;
@@ -31,10 +31,12 @@ function int(value: string | undefined, fallback: number, min = 1): number {
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   return {
-    photonAgentId: optional(env.PHOTON_AGENT_ID),
-    photonApiKey: optional(env.PHOTON_API_KEY),
-    photonApiBaseUrl: optional(env.PHOTON_API_BASE_URL),
-    photonWebhookSecret: optional(env.PHOTON_WEBHOOK_SECRET),
+    // Spectrum Cloud credential names follow https://photon.codes/docs;
+    // PHOTON_-prefixed aliases are honoured first.
+    photonProjectId: optional(env.PHOTON_PROJECT_ID) ?? optional(env.PROJECT_ID),
+    photonProjectSecret: optional(env.PHOTON_PROJECT_SECRET) ?? optional(env.PROJECT_SECRET),
+    photonApiBaseUrl: optional(env.PHOTON_API_BASE_URL) ?? 'https://spectrum.photon.codes',
+    photonWebhookSecret: optional(env.PHOTON_WEBHOOK_SECRET) ?? optional(env.SPECTRUM_SIGNING_SECRET),
     photonEnvironment: optional(env.PHOTON_ENVIRONMENT) ?? 'development',
     evidenceRequestTimeoutMs: int(env.EVIDENCE_REQUEST_TIMEOUT_MS, 8000, 100),
     evidenceMaxRedirects: int(env.EVIDENCE_MAX_REDIRECTS, 5, 0),

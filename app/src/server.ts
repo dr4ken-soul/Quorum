@@ -2,7 +2,8 @@
  * Server entry: starts the webhook transport (or the local console transport
  * in development) and feeds inbound messages to the court engine.
  *
- * Set PHOTON_WEBHOOK_SECRET before exposing the webhook publicly.
+ * Set SPECTRUM_SIGNING_SECRET (the Spectrum webhook signing secret) before
+ * exposing the webhook publicly.
  */
 import { createAgent } from './agent/runtime.ts';
 import { WebhookTransport } from './transport/webhook.ts';
@@ -32,7 +33,7 @@ async function main(): Promise<void> {
   if (useWebhook) {
     console.log(`Quorum webhook listening on port ${process.env.PORT ?? 8787}`);
   } else {
-    console.log('Quorum running in local console mode. Set PHOTON_WEBHOOK_SECRET to enable the webhook server.');
+    console.log('Quorum running in local console mode. Set SPECTRUM_SIGNING_SECRET to enable the webhook server.');
     console.log('Press Ctrl+C to stop.');
   }
 }
