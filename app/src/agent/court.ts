@@ -62,7 +62,7 @@ export class Court {
 
     // Not a command: it might still be an answer to an open intake question
     // or additional evidence on an open case in this conversation.
-    const openCase = this.store.getOpenCaseForConversation(input.conversationRef);
+    const openCase = await this.store.getOpenCaseForConversation(input.conversationRef);
     if (openCase) {
       return this.handleEvidenceMessage(openCase, input, body);
     }
@@ -95,8 +95,8 @@ export class Court {
       case 'vouch':
       case 'object': {
         const target =
-          this.store.getOpenCaseForConversation(input.conversationRef) ??
-          this.store.getLatestCaseForConversation(input.conversationRef, ['ruled']);
+          await this.store.getOpenCaseForConversation(input.conversationRef) ??
+          await this.store.getLatestCaseForConversation(input.conversationRef, ['ruled']);
         if (!target) {
           return {
             text: 'There is no case here to vote on. Send the request you want reviewed, or say "put this on trial".',
@@ -104,17 +104,17 @@ export class Court {
             event: 'vote_without_case',
           };
         }
-        this.store.addTestimony({
+        await this.store.addTestimony({
           caseId: target.id,
           participantRef: input.senderRef,
           vote: command.kind === 'vouch' ? 'vouch' : 'object',
           statement: command.statement ?? null,
           firstHand: true,
         });
-        const count = this.store.listTestimonies(target.id).length;
+        const count = (await this.store.listTestimonies(target.id)).length;
         if (target.status === 'ruled' || target.status === 'closed') {
           // New evidence on a ruled case triggers a fresh verdict.
-          this.store.updateCaseStatus(target.id, 'open');
+          await this.store.updateCaseStatus(target.id, 'open');
           const fresh = await this.deliberate(target.id);
           return {
             text: `${command.kind === 'vouch' ? 'Vouch' : 'Objection'} recorded (${count} testimonies total). Weighing the new evidence: ${fresh.text}`,
@@ -130,8 +130,8 @@ export class Court {
       }
       case 'unknown': {
         const target =
-          this.store.getOpenCaseForConversation(input.conversationRef) ??
-          this.store.getLatestCaseForConversation(input.conversationRef, ['ruled']);
+          await this.store.getOpenCaseForConversation(input.conversationRef) ??
+          await this.store.getLatestCaseForConversation(input.conversationRef, ['ruled']);
         if (!target) {
           return {
             text: 'No case to be unsure about. Say "put this on trial" to start one.',
@@ -139,7 +139,7 @@ export class Court {
             event: 'unknown_without_case',
           };
         }
-        this.store.addTestimony({
+        await this.store.addTestimony({
           caseId: target.id,
           participantRef: input.senderRef,
           vote: 'unknown',
@@ -154,8 +154,8 @@ export class Court {
       }
       case 'show-work': {
         const openCase =
-          this.store.getOpenCaseForConversation(input.conversationRef) ?? null;
-        const recent = openCase ?? this.latestRuledCase(input.conversationRef);
+          await this.store.getOpenCaseForConversation(input.conversationRef) ?? null;
+        const recent = openCase ?? await this.latestRuledCase(input.conversationRef);
         if (!recent) {
           return {
             text: 'There is nothing to show yet — no case has been reviewed in this conversation.',
@@ -166,7 +166,7 @@ export class Court {
         return this.showWork(recent.id);
       }
       case 'reopen': {
-        const closed = this.latestClosedCase(input.conversationRef);
+        const closed = await this.latestClosedCase(input.conversationRef);
         if (!closed) {
           return {
             text: 'There is no closed case to reopen here.',
@@ -174,7 +174,7 @@ export class Court {
             event: 'reopen_empty',
           };
         }
-        this.store.updateCaseStatus(closed.id, 'open');
+        await this.store.updateCaseStatus(closed.id, 'open');
         return {
           text: `Case ${caseRef(closed.id)} is reopened. New evidence, statements, or objections will be weighed before a fresh verdict.`,
           caseId: closed.id,
@@ -183,8 +183,8 @@ export class Court {
       }
       case 'close': {
         const target =
-          this.store.getOpenCaseForConversation(input.conversationRef) ??
-          this.store.getLatestCaseForConversation(input.conversationRef, ['ruled', 'deliberating']);
+          await this.store.getOpenCaseForConversation(input.conversationRef) ??
+          await this.store.getLatestCaseForConversation(input.conversationRef, ['ruled', 'deliberating']);
         if (!target) {
           return {
             text: 'There is no open case to close here.',
@@ -192,7 +192,7 @@ export class Court {
             event: 'close_empty',
           };
         }
-        this.store.updateCaseStatus(target.id, 'closed');
+        await this.store.updateCaseStatus(target.id, 'closed');
         return {
           text: `Case ${caseRef(target.id)} is closed. The record stays available for "show work" until deletion is requested.`,
           caseId: target.id,
@@ -218,8 +218,8 @@ export class Court {
   ): Promise<CourtReply> {
     // "put this on trial" on a ruled case re-opens that case rather than
     // duplicating it, so the group keeps one case per request.
-    const recentRuled = this.store.getLatestCaseForConversation(input.conversationRef, ['ruled']);
-    const existing = this.store.getOpenCaseForConversation(input.conversationRef);
+    const recentRuled = await this.store.getLatestCaseForConversation(input.conversationRef, ['ruled']);
+    const existing = await this.store.getOpenCaseForConversation(input.conversationRef);
     if (existing) {
       return {
         text: `A case is already open in this conversation (${caseRef(existing.id)}). Send evidence, "vouch", "object", or "show work" — or "close case" to end it first.`,
@@ -228,7 +228,7 @@ export class Court {
       };
     }
     if (recentRuled) {
-      this.store.addCaseMessage({
+      await this.store.addCaseMessage({
         caseId: recentRuled.id,
         messageRef: input.messageRef,
         senderRef: input.senderRef,
@@ -236,22 +236,22 @@ export class Court {
         attachmentHash: input.attachmentHash ?? null,
         includedByUser: true,
       });
-      this.store.upsertParticipant(recentRuled.id, input.senderRef);
-      this.store.updateCaseStatus(recentRuled.id, 'open');
+      await this.store.upsertParticipant(recentRuled.id, input.senderRef);
+      await this.store.updateCaseStatus(recentRuled.id, 'open');
       return this.deliberate(recentRuled.id);
     }
 
     const question = followUpQuestion(claim);
     if (question) {
       // Material fields missing: store the message and ask one focused question.
-      const record = this.store.createCase({
+      const record = await this.store.createCase({
         conversationRef: input.conversationRef,
         openedByRef: input.senderRef,
         requestedAmount: claim.amount,
         requestedCurrency: claim.currency,
         requestedAction: claim.requestedAction,
       });
-      this.store.addCaseMessage({
+      await this.store.addCaseMessage({
         caseId: record.id,
         messageRef: input.messageRef,
         senderRef: input.senderRef,
@@ -259,7 +259,7 @@ export class Court {
         attachmentHash: input.attachmentHash ?? null,
         includedByUser: true,
       });
-      this.store.upsertParticipant(record.id, input.senderRef);
+      await this.store.upsertParticipant(record.id, input.senderRef);
       return {
         text: `Case ${caseRef(record.id)} opened. ${question}`,
         caseId: record.id,
@@ -268,14 +268,14 @@ export class Court {
     }
 
     // Material fields present: open, collect evidence, and issue a verdict.
-    const record = this.store.createCase({
+    const record = await this.store.createCase({
       conversationRef: input.conversationRef,
       openedByRef: input.senderRef,
       requestedAmount: claim.amount,
       requestedCurrency: claim.currency,
       requestedAction: claim.requestedAction,
     });
-    this.store.addCaseMessage({
+    await this.store.addCaseMessage({
       caseId: record.id,
       messageRef: input.messageRef,
       senderRef: input.senderRef,
@@ -283,7 +283,7 @@ export class Court {
       attachmentHash: input.attachmentHash ?? null,
       includedByUser: true,
     });
-    this.store.upsertParticipant(record.id, input.senderRef);
+    await this.store.upsertParticipant(record.id, input.senderRef);
     return this.deliberate(record.id);
   }
 
@@ -299,7 +299,7 @@ export class Court {
     },
     body: string,
   ): Promise<CourtReply> {
-    this.store.addCaseMessage({
+    await this.store.addCaseMessage({
       caseId: openCase.id,
       messageRef: input.messageRef,
       senderRef: input.senderRef,
@@ -307,10 +307,10 @@ export class Court {
       attachmentHash: input.attachmentHash ?? null,
       includedByUser: true,
     });
-    this.store.upsertParticipant(openCase.id, input.senderRef);
+    await this.store.upsertParticipant(openCase.id, input.senderRef);
 
     // If the case was waiting on an intake answer, re-extract with the new text.
-    const messages = this.store.listCaseMessages(openCase.id);
+    const messages = await this.store.listCaseMessages(openCase.id);
     const combined = messages
       .map((m) => m.body ?? '')
       .join('\n');
@@ -338,14 +338,14 @@ export class Court {
 
   /** Run all evidence adapters and issue a verdict. */
   private async deliberate(caseId: string): Promise<CourtReply> {
-    this.store.updateCaseStatus(caseId, 'deliberating');
+    await this.store.updateCaseStatus(caseId, 'deliberating');
     // Re-deliberation starts from a clean exhibit table so evidence from a
     // previous round is never counted twice.
-    this.store.clearExhibits(caseId);
-    const record = this.store.getCase(caseId);
+    await this.store.clearExhibits(caseId);
+    const record = await this.store.getCase(caseId);
     if (!record) throw new Error(`case ${caseId} vanished during deliberation`);
-    const messages = this.store.listCaseMessages(caseId);
-    const testimonies = this.store.listTestimonies(caseId);
+    const messages = await this.store.listCaseMessages(caseId);
+    const testimonies = await this.store.listTestimonies(caseId);
     const claim = extractClaim(
       messages
         .map((m) => m.body ?? '')
@@ -375,7 +375,7 @@ export class Court {
     for (const adapter of this.adapters) {
       const draft = await adapter.inspect(evidenceInput);
       urlExhibitDrafts.push(draft);
-      this.store.addExhibit({
+      await this.store.addExhibit({
         caseId,
         exhibitType: draft.exhibitType,
         status: draft.status,
@@ -389,7 +389,7 @@ export class Court {
       });
     }
 
-    const exhibits = this.store.listExhibits(caseId);
+    const exhibits = await this.store.listExhibits(caseId);
     const decision = decideVerdict(exhibits, testimonies);
     const receipt = formatReceipt(
       decision.outcome,
@@ -398,7 +398,7 @@ export class Court {
       decision.strongestRisk,
       decision.unresolvedEvidence,
     );
-    const verdict = this.store.addVerdict({
+    const verdict = await this.store.addVerdict({
       caseId,
       outcome: decision.outcome,
       confidence: decision.confidence,
@@ -406,7 +406,7 @@ export class Court {
       unresolvedEvidence: decision.unresolvedEvidence,
       receiptText: receipt,
     });
-    this.store.updateCaseStatus(caseId, 'ruled');
+    await this.store.updateCaseStatus(caseId, 'ruled');
 
     return {
       text: `${receipt} Reason: ${decision.reason}. (Ask "show work" for the full record.)`,
@@ -416,14 +416,14 @@ export class Court {
   }
 
   /** Human-readable case record for SHOW WORK. */
-  private showWork(caseId: string): CourtReply {
-    const record = this.store.getCase(caseId);
+  private async showWork(caseId: string): Promise<CourtReply> {
+    const record = await this.store.getCase(caseId);
     if (!record) {
       return { text: 'That case no longer exists.', caseId, event: 'show_work_missing' };
     }
-    const exhibits = this.store.listExhibits(caseId);
-    const testimonies = this.store.listTestimonies(caseId);
-    const verdict = this.store.getLatestVerdict(caseId);
+    const exhibits = await this.store.listExhibits(caseId);
+    const testimonies = await this.store.listTestimonies(caseId);
+    const verdict = await this.store.getLatestVerdict(caseId);
     const lines: string[] = [];
     lines.push(`Case ${caseRef(caseId)} — record`);
     lines.push(`Status: ${record.status}. Opened by ${record.openedByRef}.`);
@@ -452,29 +452,29 @@ export class Court {
     return { text: lines.join('\n'), caseId, event: 'show_work' };
   }
 
-  private latestRuledCase(conversationRef: string): CaseRecord | null {
-    return this.latestCaseWithStatuses(conversationRef, ['ruled', 'closed']);
+  private async latestRuledCase(conversationRef: string): Promise<CaseRecord | null> {
+    return await this.latestCaseWithStatuses(conversationRef, ['ruled', 'closed']);
   }
 
-  private latestClosedCase(conversationRef: string): CaseRecord | null {
-    return this.latestCaseWithStatuses(conversationRef, ['closed']);
+  private async latestClosedCase(conversationRef: string): Promise<CaseRecord | null> {
+    return await this.latestCaseWithStatuses(conversationRef, ['closed']);
   }
 
-  private latestCaseWithStatuses(
+  private async latestCaseWithStatuses(
     conversationRef: string,
     statuses: CaseRecord['status'][],
-  ): CaseRecord | null {
-    return this.store.getLatestCaseForConversation(conversationRef, statuses);
+  ): Promise<CaseRecord | null> {
+    return await this.store.getLatestCaseForConversation(conversationRef, statuses);
   }
 
   /** Request deletion of the case record (retention boundary). */
   async requestDeletion(caseId: string, requestedByRef: string): Promise<CourtReply> {
-    const record = this.store.getCase(caseId);
+    const record = await this.store.getCase(caseId);
     if (!record) {
       return { text: 'That case no longer exists.', caseId, event: 'delete_missing' };
     }
-    this.store.addRetentionRequest(caseId, requestedByRef);
-    this.store.deleteCase(caseId);
+    await this.store.addRetentionRequest(caseId, requestedByRef);
+    await this.store.deleteCase(caseId);
     return {
       text: `Case ${caseRef(caseId)} deleted, including all stored message text and attachments. The case ID remains in the ledger as proof the deletion ran.`,
       caseId,
@@ -483,8 +483,8 @@ export class Court {
   }
 
   /** Retention sweep: purge message bodies past their expiry. */
-  sweepRetention(): number {
-    return this.store.purgeExpiredBodies(this.nowFn().toISOString());
+  async sweepRetention(): Promise<number> {
+    return await this.store.purgeExpiredBodies(this.nowFn().toISOString());
   }
 }
 

@@ -19,11 +19,61 @@ import type {
 import { newId } from './types.ts';
 
 /**
- * SQLite implementation of docs/001_initial.sql for the local demo.
- * Production swaps this for Postgres with the same table shapes.
+ * Storage contract for the court. Every method is asynchronous so the same
+ * interface serves the local SQLite demo store and the Supabase Postgres
+ * store. The store never logs message bodies.
+ */
+export interface Store {
+  createCase(input: {
+    conversationRef: string;
+    openedByRef: string;
+    requestedAmount?: string | null;
+    requestedCurrency?: string | null;
+    requestedAction?: string | null;
+    closesAt?: string | null;
+  }): Promise<CaseRecord>;
+  getCase(caseId: string): Promise<CaseRecord | null>;
+  getOpenCaseForConversation(conversationRef: string): Promise<CaseRecord | null>;
+  getLatestCaseForConversation(conversationRef: string, statuses: string[]): Promise<CaseRecord | null>;
+  updateCaseStatus(caseId: string, status: CaseStatus): Promise<void>;
+  setCaseClosesAt(caseId: string, closesAt: string | null): Promise<void>;
+  addCaseMessage(input: {
+    caseId: string;
+    messageRef: string;
+    senderRef: string;
+    body?: string | null;
+    attachmentHash?: string | null;
+    includedByUser?: boolean;
+    receivedAt?: string;
+    expiresAt?: string;
+  }): Promise<CaseMessage>;
+  listCaseMessages(caseId: string): Promise<CaseMessage[]>;
+  addExhibit(input: Omit<Exhibit, 'id' | 'checkedAt'> & { checkedAt?: string }): Promise<Exhibit>;
+  listExhibits(caseId: string): Promise<Exhibit[]>;
+  clearExhibits(caseId: string): Promise<void>;
+  upsertParticipant(caseId: string, participantRef: string): Promise<Participant>;
+  listParticipants(caseId: string): Promise<Participant[]>;
+  addTestimony(input: {
+    caseId: string;
+    participantRef: string;
+    vote: Vote | null;
+    statement: string | null;
+    firstHand: boolean;
+  }): Promise<Testimony>;
+  listTestimonies(caseId: string): Promise<Testimony[]>;
+  addVerdict(input: Omit<Verdict, 'id' | 'issuedAt'>): Promise<Verdict>;
+  getLatestVerdict(caseId: string): Promise<Verdict | null>;
+  addRetentionRequest(caseId: string, requestedByRef: string): Promise<RetentionRequest>;
+  deleteCase(caseId: string): Promise<void>;
+  purgeExpiredBodies(now?: string): Promise<number>;
+  close(): Promise<void>;
+}
+/**
+ * SQLite implementation of the shared Store contract for local runs and
+ * tests. Production uses PgStore (Supabase Postgres) with the same shapes.
  * The store never logs message bodies.
  */
-export class Store {
+export class SqliteStore implements Store {
   private readonly db: DatabaseSync;
 
   constructor(databaseUrl: string) {
@@ -111,14 +161,14 @@ export class Store {
     `);
   }
 
-  createCase(input: {
+  async createCase(input: {
     conversationRef: string;
     openedByRef: string;
     requestedAmount?: string | null;
     requestedCurrency?: string | null;
     requestedAction?: string | null;
     closesAt?: string | null;
-  }): CaseRecord {
+  }): Promise<CaseRecord> {
     const record: CaseRecord = {
       id: newId(),
       conversationRef: input.conversationRef,
@@ -152,13 +202,13 @@ export class Store {
     return record;
   }
 
-  getCase(caseId: string): CaseRecord | null {
+  async getCase(caseId: string): Promise<CaseRecord | null> {
     const row = this.db
       .prepare(`select * from cases where id = ? and status != 'deleted'`)
       .get(caseId) as CaseRow | undefined;
     return row ? rowToCase(row) : null;
   }
-  getOpenCaseForConversation(conversationRef: string): CaseRecord | null {
+  async getOpenCaseForConversation(conversationRef: string): Promise<CaseRecord | null> {
     const row = this.db
       .prepare(
         `select * from cases where photon_conversation_ref = ? and status in ('open', 'deliberating')
@@ -168,7 +218,7 @@ export class Store {
     return row ? rowToCase(row) : null;
   }
 
-  getLatestCaseForConversation(conversationRef: string, statuses: string[]): CaseRecord | null {
+  async getLatestCaseForConversation(conversationRef: string, statuses: string[]): Promise<CaseRecord | null> {
     const placeholders = statuses.map(() => '?').join(', ');
     const row = this.db
       .prepare(
@@ -179,15 +229,15 @@ export class Store {
     return row ? rowToCase(row) : null;
   }
 
-  updateCaseStatus(caseId: string, status: CaseStatus): void {
+  async updateCaseStatus(caseId: string, status: CaseStatus): Promise<void> {
     this.db.prepare(`update cases set status = ? where id = ?`).run(status, caseId);
   }
 
-  setCaseClosesAt(caseId: string, closesAt: string | null): void {
+  async setCaseClosesAt(caseId: string, closesAt: string | null): Promise<void> {
     this.db.prepare(`update cases set closes_at = ? where id = ?`).run(closesAt, caseId);
   }
 
-  addCaseMessage(input: {
+  async addCaseMessage(input: {
     caseId: string;
     messageRef: string;
     senderRef: string;
@@ -196,7 +246,7 @@ export class Store {
     includedByUser?: boolean;
     receivedAt?: string;
     expiresAt?: string;
-  }): CaseMessage {
+  }): Promise<CaseMessage> {
     const receivedAt = input.receivedAt ?? new Date().toISOString();
     const expiresAt =
       input.expiresAt ??
@@ -231,14 +281,14 @@ export class Store {
     return message;
   }
 
-  listCaseMessages(caseId: string): CaseMessage[] {
+  async listCaseMessages(caseId: string): Promise<CaseMessage[]> {
     const rows = this.db
       .prepare(`select * from case_messages where case_id = ? order by received_at asc`)
       .all(caseId) as unknown as MessageRow[];
     return rows.map(rowToMessage);
   }
 
-  addExhibit(input: Omit<Exhibit, 'id' | 'checkedAt'> & { checkedAt?: string }): Exhibit {
+  async addExhibit(input: Omit<Exhibit, 'id' | 'checkedAt'> & { checkedAt?: string }): Promise<Exhibit> {
     const exhibit: Exhibit = {
       ...input,
       id: newId(),
@@ -266,7 +316,7 @@ export class Store {
     return exhibit;
   }
 
-  listExhibits(caseId: string): Exhibit[] {
+  async listExhibits(caseId: string): Promise<Exhibit[]> {
     const rows = this.db
       .prepare(`select * from exhibits where case_id = ? order by checked_at asc`)
       .all(caseId) as unknown as ExhibitRow[];
@@ -274,11 +324,11 @@ export class Store {
   }
 
   /** Remove a case's exhibits so re-deliberation starts clean. */
-  clearExhibits(caseId: string): void {
+  async clearExhibits(caseId: string): Promise<void> {
     this.db.prepare(`delete from exhibits where case_id = ?`).run(caseId);
   }
 
-  upsertParticipant(caseId: string, participantRef: string): Participant {
+  async upsertParticipant(caseId: string, participantRef: string): Promise<Participant> {
     const existing = this.db
       .prepare(`select * from participants where case_id = ? and participant_ref = ?`)
       .get(caseId, participantRef) as ParticipantRow | undefined;
@@ -295,21 +345,21 @@ export class Store {
     return participant;
   }
 
-  listParticipants(caseId: string): Participant[] {
+  async listParticipants(caseId: string): Promise<Participant[]> {
     const rows = this.db
       .prepare(`select * from participants where case_id = ? order by joined_at asc`)
       .all(caseId) as unknown as ParticipantRow[];
     return rows.map(rowToParticipant);
   }
 
-  addTestimony(input: {
+  async addTestimony(input: {
     caseId: string;
     participantRef: string;
     vote: Vote | null;
     statement: string | null;
     firstHand: boolean;
-  }): Testimony {
-    const participant = this.upsertParticipant(input.caseId, input.participantRef);
+  }): Promise<Testimony> {
+    const participant = await this.upsertParticipant(input.caseId, input.participantRef);
     const testimony: Testimony = {
       id: newId(),
       caseId: input.caseId,
@@ -337,7 +387,7 @@ export class Store {
     return testimony;
   }
 
-  listTestimonies(caseId: string): Testimony[] {
+  async listTestimonies(caseId: string): Promise<Testimony[]> {
     const rows = this.db
       .prepare(
         `select t.*, p.participant_ref from testimonies t
@@ -348,7 +398,7 @@ export class Store {
     return rows.map(rowToTestimony);
   }
 
-  addVerdict(input: Omit<Verdict, 'id' | 'issuedAt'>): Verdict {
+  async addVerdict(input: Omit<Verdict, 'id' | 'issuedAt'>): Promise<Verdict> {
     const verdict: Verdict = { ...input, id: newId(), issuedAt: new Date().toISOString() };
     this.db
       .prepare(
@@ -368,14 +418,14 @@ export class Store {
     return verdict;
   }
 
-  getLatestVerdict(caseId: string): Verdict | null {
+  async getLatestVerdict(caseId: string): Promise<Verdict | null> {
     const row = this.db
       .prepare(`select * from verdicts where case_id = ? order by issued_at desc limit 1`)
       .get(caseId) as VerdictRow | undefined;
     return row ? rowToVerdict(row) : null;
   }
 
-  addRetentionRequest(caseId: string, requestedByRef: string): RetentionRequest {
+  async addRetentionRequest(caseId: string, requestedByRef: string): Promise<RetentionRequest> {
     const request: RetentionRequest = {
       id: newId(),
       caseId,
@@ -396,7 +446,7 @@ export class Store {
    * Deletion cascade. Message bodies and attachments are removed first so that
    * a failure cannot leave private text behind in a deleted case.
    */
-  deleteCase(caseId: string): void {
+  async deleteCase(caseId: string): Promise<void> {
     this.db.prepare(`delete from case_messages where case_id = ?`).run(caseId);
     this.db.prepare(`delete from exhibits where case_id = ?`).run(caseId);
     this.db.prepare(`delete from testimonies where case_id = ?`).run(caseId);
@@ -411,12 +461,12 @@ export class Store {
   }
 
   /** Remove expired message bodies. Called by the retention sweep. */
-  purgeExpiredBodies(now: string = new Date().toISOString()): number {
+  async purgeExpiredBodies(now: string = new Date().toISOString()): Promise<number> {
     const result = this.db.prepare(`delete from case_messages where expires_at < ?`).run(now);
     return Number(result.changes);
   }
 
-  close(): void {
+  async close(): Promise<void> {
     this.db.close();
   }
 }

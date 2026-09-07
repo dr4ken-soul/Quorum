@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Court } from '../src/agent/court.ts';
-import { Store } from '../src/domain/store.ts';
+import { SqliteStore } from '../src/domain/store.ts';
 import { loadConfig } from '../src/config.ts';
 import { messageClaimAdapter } from '../src/agent/evidence/message-claim.ts';
 import { contextConsistencyAdapter } from '../src/agent/evidence/context-consistency.ts';
@@ -16,8 +16,8 @@ const offlineFetch = (async () => {
   throw new Error('offline test environment');
 }) as typeof fetch;
 
-function newCourt(databaseUrl = ':memory:'): { court: Court; store: Store } {
-  const store = new Store(databaseUrl);
+function newCourt(databaseUrl = ':memory:'): { court: Court; store: SqliteStore } {
+  const store = new SqliteStore(databaseUrl);
   const court = new Court({
     store,
     config,
@@ -63,7 +63,7 @@ test('full lifecycle: request -> intake -> testimony -> verdict -> show work', a
   });
   assert.ok(showWork.text.includes('url-inspection'));
   assert.ok(showWork.text.includes('Testimony'));
-  store.close();
+  await store.close();
 });
 
 test('vague request triggers one focused intake question', async () => {
@@ -76,7 +76,7 @@ test('vague request triggers one focused intake question', async () => {
     attachmentHash: null,
   });
   assert.ok(/the amount|who receives|how the payment/.test(reply.text));
-  store.close();
+  await store.close();
 });
 
 test('objections produce a non-pay verdict with recorded evidence', async () => {
@@ -106,7 +106,7 @@ test('objections produce a non-pay verdict with recorded evidence', async () => 
     attachmentHash: null,
   });
   assert.ok(showWork.text.includes('object'));
-  store.close();
+  await store.close();
 });
 
 test('close and reopen work, and deletion removes message bodies', async () => {
@@ -141,8 +141,8 @@ test('close and reopen work, and deletion removes message bodies', async () => {
 
   const deletion = await court.requestDeletion(opened.caseId!, 'maya');
   assert.ok(deletion.text.includes('deleted'));
-  assert.equal(store.listCaseMessages(opened.caseId!).length, 0);
-  store.close();
+  assert.equal((await store.listCaseMessages(opened.caseId!)).length, 0);
+  await store.close();
 });
 
 test('image evidence reports unavailable honestly without lowering verdicts to walk-away', async () => {
@@ -157,5 +157,5 @@ test('image evidence reports unavailable honestly without lowering verdicts to w
   // Unavailable image evidence must never be dressed up as proof of fraud.
   assert.ok(!reply.text.includes('WALK AWAY'));
   assert.ok(reply.text.includes('PAY') || reply.text.includes('PAUSE'));
-  store.close();
+  await store.close();
 });

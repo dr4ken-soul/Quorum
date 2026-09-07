@@ -40,13 +40,18 @@ Key design points:
 
 ### Photon integration
 
-Photon (Spectrum) is the intended host platform: <https://photon.codes>. The integration surface is now documented and implemented:
+Photon (Spectrum) is the messaging bridge: <https://photon.codes>. Quorum is fully wired for it, and the free live path needs **no hosting at all** — Photon does not host your code; it connects your locally-running agent to iMessage.
 
-- **Inbound** — `WebhookTransport` (`app/src/transport/webhook.ts`) implements Spectrum's signed webhook format end-to-end: `POST /spectrum-webhook` with `X-Spectrum-Signature: v0=<hmac-sha256 of "v0:{timestamp}:{rawBody}">`, `{event, space, message}` payloads, a 5-minute replay window, at-least-once dedupe on `(webhookId, message.id)`, and forward-compatible handling of unknown events (docs: <https://photon.codes/docs/spectrum-ts/webhooks>).
-- **Outbound** — Spectrum webhooks are inbound-only (no HTTP send endpoint). Production replies run through the `spectrum-ts` SDK loop — `Spectrum({ projectId, projectSecret, providers: [imessage.config()] })` — which is the remaining `PhotonTransport` work in `app/src/transport/types.ts`. It slots in without touching the court, evidence, or verdict logic.
-- **Credentials** — create a project at <https://app.photon.codes> and copy `PROJECT_ID` / `PROJECT_SECRET` into `app/.env`. When you register a webhook URL (dashboard or Spectrum API), a 64-character `SPECTRUM_SIGNING_SECRET` is returned exactly once; set it in `app/.env` to run the webhook server with `npm run server`.
+- **Go live for $0 (recommended)** — run the SDK loop from your laptop with the Free plan (iMessage: unlimited daily messages, ≤10 users). In `app/.env` set your `PROJECT_ID` / `PROJECT_SECRET` from <https://app.photon.codes>, then:
+  ```bash
+  cd app
+  npm run server        # "Quorum connected to Photon (Spectrum) - listening for iMessage."
+  ```
+  This uses `PhotonTransport` (`app/src/transport/photon.ts`): a long-lived `spectrum-ts` stream (`for await (const [space, message] of app.messages)`) that receives inbound iMessages, runs them through the court, and replies via `space.send(...)`. Redeliveries are deduped on `message.id`, handler errors never kill the stream, and Ctrl+C shuts down cleanly. No public URL, no tunnel, no webhook.
+- **Webhook mode (optional, not needed)** — `WebhookTransport` (`app/src/transport/webhook.ts`) is the alternative when you want an HTTP-hosted deployment: `POST /spectrum-webhook` with `X-Spectrum-Signature: v0=<hmac>` verification, replay window, and at-least-once dedupe. It requires a public HTTPS URL (Railway/Render/tunnel) and the one-time `SPECTRUM_SIGNING_SECRET` Photon shows when you register the endpoint. Leave `SPECTRUM_SIGNING_SECRET` blank for the SDK-loop path; a made-up value would make the server reject every real delivery.
+- **Supabase (optional)** — the court state can live in Supabase's free Postgres instead of local SQLite: set `DATABASE_URL` to the connection pooler string (Supabase → Project Settings → Database, port 6543), e.g. `postgresql://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres`. `PgStore` (`app/src/domain/pg-store.ts`) is selected automatically for `postgres://`/`postgresql://` URLs and creates all tables on first use — nothing to run by hand. SQLite stays the default for local runs and tests.
 
-Until those credentials exist, the agent runs in local console mode (`LocalConsoleTransport`), and the demos replay the full court arc offline.
+Until credentials exist, the agent runs in local console mode (`LocalConsoleTransport`), and the demos replay the full court arc offline.
 
 ## The site (`web/`)
 

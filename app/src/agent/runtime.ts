@@ -1,4 +1,6 @@
-import { Store } from '../domain/store.ts';
+import { SqliteStore } from '../domain/store.ts';
+import { PgStore } from '../domain/pg-store.ts';
+import type { Store } from '../domain/store.ts';
 import { loadConfig } from '../config.ts';
 import { createLogger } from '../logger.ts';
 import { Court as CourtImpl } from './court.ts';
@@ -31,7 +33,11 @@ export function createAgent(options: {
 }): AgentRuntime {
   const config = loadConfig(options.env);
   const logger = createLogger(config.logLevel);
-  const store = new Store(options.databaseUrl ?? config.databaseUrl);
+  const databaseUrl = options.databaseUrl ?? config.databaseUrl;
+  // Postgres/Supabase connection strings select PgStore; anything else
+  // (a file path or :memory:) uses the local SQLite store.
+  const isPostgres = databaseUrl.startsWith('postgres://') || databaseUrl.startsWith('postgresql://');
+  const store: Store = isPostgres ? new PgStore(databaseUrl) : new SqliteStore(databaseUrl);
   const transport = options.transport ?? new LocalConsoleTransport();
   const fetchFn = options.fetchFn ?? fetch;
 

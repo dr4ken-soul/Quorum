@@ -9,16 +9,16 @@ import type { EvidenceAdapter, EvidenceInput, ExhibitDraft } from './types.ts';
  * in the court commands layer, which stores each answer the moment it arrives.
  */
 export function createParticipantTestimonyAdapter(
-  collectedForCase: (caseId: string) => readonly {
+  collectedForCase: (caseId: string) => Promise<readonly {
     participantRef: string;
     vote: 'vouch' | 'object' | 'unknown' | null;
     firstHand: boolean;
-  }[],
+  }[]>,
 ): EvidenceAdapter {
   return {
     name: 'participant-testimony',
     async inspect(input: EvidenceInput): Promise<ExhibitDraft> {
-      const testimonies = collectedForCase(input.caseId);
+      const testimonies = await collectedForCase(input.caseId);
       if (testimonies.length === 0) {
         return {
           exhibitType: 'participant-testimony',
