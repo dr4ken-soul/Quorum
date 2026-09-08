@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test \"test/*.test.ts\"",
     "demo": "node --env-file-if-exists=.env src/dev/demo.ts",
+    "first-contact": "node --env-file-if-exists=.env src/dev/first-contact.ts",
     "scenario": "node --env-file-if-exists=.env src/dev/demo.ts --scenario",
     "server": "node --env-file-if-exists=.env src/server.ts"
   },
