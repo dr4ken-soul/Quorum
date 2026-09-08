@@ -18,20 +18,20 @@ Everything you need to film the hackathon demo in one go. Follow this top to bot
 
 ---
 
-## B. Get your Quorum iMessage number
+## B. Your Quorum iMessage number
 
-The agent's phone number comes from Photon. On the Free plan it is a **shared pool**: no fixed number is listed anywhere, and the number only comes to life when the agent texts you first.
+**The Quorum number is +16287896792.** It is already live and opted in: texting it works both ways.
 
-1. From the `app` folder, run the first-contact command with your iPhone number:
+1. On your iPhone, save +16287896792 in Contacts as **Quorum**.
+2. Start the agent and leave it running the whole time you are recording:
 
    ```
-   QUORUM_DEMO_PHONE=+44XXXXXXXXXXX npm run first-contact
+   npm run server
    ```
 
-2. Within a minute or two your iPhone receives an iMessage from an unknown number. That number IS Quorum. Save it in Contacts as **Quorum**.
-3. Reply `put this on trial` in that thread to check it is live. The agent should reply with the trial notice.
-4. Use that saved thread for the whole recording.
-5. If no text arrives within five minutes, something is wrong: check the terminal for errors, or email **help@photon.codes** and ask for the shared-pool iMessage line for project `f70223a2-218e-4b5f-9ce9-ef91ca245e0d`.
+   Wait for the line `Quorum connected to Photon (Spectrum) - listening for iMessage.`
+3. Use that saved Quorum thread for the whole recording. If the agent ever seems silent, send any message to the thread and check the terminal for the inbound.
+4. If you ever start from a fresh Photon project (not needed for this recording): the shared-pool number only replies to people who have texted it first. Text it once from the iPhone, watch `meta.opt_in` flip to `true` in `npx -y @photon-ai/cli spectrum users ls --json`, and only then can the agent message out.
 
 ---
 
