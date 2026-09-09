@@ -31,6 +31,7 @@ Everything you need to film the hackathon demo in one go. Follow this top to bot
 
    Wait for the line `Quorum connected to Photon (Spectrum) - listening for iMessage.`
 3. Use that saved Quorum thread for the whole recording. If the agent ever seems silent, send any message to the thread and check the terminal for the inbound.
+4. **Texts must come from your phone number, not your Apple ID email.** Green SMS bubbles are fine — they work exactly the same as blue ones. If your iPhone sends from an email handle (check Settings → Messages → Send & Receive), Photon's shared pool silently drops the message. Fix: turn iMessage off before texting so it goes as SMS, or set "Start new conversations from" to your phone number.
 4. If you ever start from a fresh Photon project (not needed for this recording): the shared-pool number only replies to people who have texted it first. Text it once from the iPhone, watch `meta.opt_in` flip to `true` in `npx -y @photon-ai/cli spectrum users ls --json`, and only then can the agent message out.
 
 ---
